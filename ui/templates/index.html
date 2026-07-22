@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description"
+    content="AI-powered Frontend Generation Agent — Upload a UI screenshot and user stories to generate a complete React app." />
+  <title>AI Frontend Generation Agent</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+
+<body>
+  <!-- ======= BACKGROUND ======= -->
+  <div class="bg-grid" aria-hidden="true"></div>
+  <div class="bg-orbs" aria-hidden="true">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+  </div>
+
+  <!-- ======= HEADER ======= -->
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-icon" aria-hidden="true">⚡</span>
+        <div>
+          <span class="logo-title">AI Frontend Agent</span>
+          <span class="logo-sub">Powered by Groq × React × Vite</span>
+        </div>
+      </div>
+      <div class="header-badges">
+        <span class="badge badge-groq">Groq API</span>
+        <span class="badge badge-react">React</span>
+        <span class="badge badge-vite">Vite</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ======= MAIN ======= -->
+  <main class="main-content">
+
+    <!-- LEFT COLUMN: INPUT FORM -->
+    <section class="card input-card" id="input-panel" aria-label="Generation Inputs">
+      <div class="card-header">
+        <h1 class="card-title">
+          <span class="step-num">01</span>
+          Configure Generation
+        </h1>
+        <p class="card-subtitle">Upload your UI screenshot and user stories to generate a React app.</p>
+      </div>
+
+      <form id="gen-form" novalidate>
+
+        <!-- Image Upload -->
+        <div class="form-group" id="image-group">
+          <label class="form-label" for="image-input">
+            Reference UI Screenshot
+            <span class="required" aria-label="required">*</span>
+          </label>
+          <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-label="Drop or click to upload image">
+            <div class="dropzone-icon" aria-hidden="true">🖼️</div>
+            <div class="dropzone-text">
+              <span class="dz-primary">Drop your UI screenshot here</span>
+              <span class="dz-secondary">or click to browse — PNG, JPG, WEBP</span>
+            </div>
+            <input type="file" id="image-input" name="image" accept=".png,.jpg,.jpeg,.webp" class="file-hidden"
+              aria-label="Upload screenshot" />
+          </div>
+          <div class="image-preview-wrap" id="image-preview-wrap" hidden>
+            <img id="image-preview" class="image-preview" alt="Preview of uploaded screenshot" />
+            <button type="button" class="preview-remove" id="preview-remove" aria-label="Remove image">✕</button>
+          </div>
+        </div>
+
+        <!-- User Stories JSON -->
+        <div class="form-group" id="stories-group">
+          <label class="form-label" for="stories-textarea">
+            User Stories (JSON)
+            <span class="required" aria-label="required">*</span>
+          </label>
+          <div class="textarea-toolbar">
+            <button type="button" class="toolbar-btn" id="load-sample-btn" title="Load sample stories">Load
+              Sample</button>
+            <button type="button" class="toolbar-btn" id="format-json-btn" title="Format JSON">Format JSON</button>
+          </div>
+          <textarea id="stories-textarea" name="stories" class="json-textarea" rows="12" placeholder='[
+  {
+    "id": "US101",
+    "title": "User Login",
+    "description": "As a user, I want to log in with my email and password.",
+    "acceptanceCriteria": [
+      "Email field validates format",
+      "Password field is masked",
+      "Login button submits the form"
+    ]
+  }
+]' spellcheck="false" aria-label="User stories in JSON format"></textarea>
+          <div class="json-status" id="json-status" aria-live="polite"></div>
+        </div>
+
+        <!-- Project Settings -->
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label class="form-label" for="project-name">Project Name</label>
+            <input type="text" id="project-name" name="project" class="form-input" value="project_1"
+              placeholder="project_1" aria-label="Project name" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="output-lang">Output Language</label>
+            <div class="lang-toggle" role="group" aria-label="Output language">
+              <button type="button" class="lang-btn active" id="lang-tsx" data-lang="tsx"
+                aria-pressed="true">TSX</button>
+              <button type="button" class="lang-btn" id="lang-jsx" data-lang="jsx" aria-pressed="false">JSX</button>
+            </div>
+            <input type="hidden" id="lang-input" name="lang" value="tsx" />
+          </div>
+        </div>
+
+        <!-- Submit -->
+        <button type="submit" class="btn-generate" id="generate-btn" aria-label="Start generation pipeline">
+          <span class="btn-icon" aria-hidden="true">⚡</span>
+          <span class="btn-text">Generate Frontend</span>
+          <span class="btn-spinner" id="btn-spinner" hidden aria-hidden="true"></span>
+        </button>
+
+      </form>
+    </section>
+
+    <!-- RIGHT COLUMN: PIPELINE + RESULTS -->
+    <div class="right-col">
+
+      <!-- Pipeline Progress -->
+      <section class="card pipeline-card" id="pipeline-panel" aria-label="Pipeline Progress" aria-live="polite">
+        <div class="card-header">
+          <h2 class="card-title">
+            <span class="step-num">02</span>
+            Pipeline Progress
+          </h2>
+          <div class="pipeline-total" id="pipeline-total" hidden>
+            Total: <span id="total-elapsed">00:00</span>
+          </div>
+        </div>
+
+        <div class="pipeline-stages" id="pipeline-stages">
+          <!-- Stage 1 -->
+          <div class="stage-item" id="stage-1" data-stage="1">
+            <div class="stage-header">
+              <div class="stage-icon pending" id="stage-1-icon" aria-hidden="true">○</div>
+              <div class="stage-info">
+                <div class="stage-name">Stage 1 — Image Analysis</div>
+                <div class="stage-desc">Vision model analyzes UI screenshot → <code>ui_spec.json</code></div>
+              </div>
+              <div class="stage-time" id="stage-1-time">—</div>
+            </div>
+            <div class="stage-bar-wrap" id="stage-1-bar-wrap">
+              <div class="stage-bar" id="stage-1-bar"></div>
+            </div>
+            <div class="stage-log" id="stage-1-log" aria-live="polite"></div>
+          </div>
+
+          <!-- Stage 2 -->
+          <div class="stage-item" id="stage-2" data-stage="2">
+            <div class="stage-header">
+              <div class="stage-icon pending" id="stage-2-icon" aria-hidden="true">○</div>
+              <div class="stage-info">
+                <div class="stage-name">Stage 2 — Story Mapping</div>
+                <div class="stage-desc">Maps user stories to UI elements → <code>story_ui_mapping.json</code></div>
+              </div>
+              <div class="stage-time" id="stage-2-time">—</div>
+            </div>
+            <div class="stage-bar-wrap" id="stage-2-bar-wrap">
+              <div class="stage-bar" id="stage-2-bar"></div>
+            </div>
+            <div class="stage-log" id="stage-2-log" aria-live="polite"></div>
+          </div>
+
+          <!-- Stage 3 -->
+          <div class="stage-item" id="stage-3" data-stage="3">
+            <div class="stage-header">
+              <div class="stage-icon pending" id="stage-3-icon" aria-hidden="true">○</div>
+              <div class="stage-info">
+                <div class="stage-name">Stage 3 — Code Generation</div>
+                <div class="stage-desc">Generates React/Vite project, HTML, CSS → runnable app</div>
+              </div>
+              <div class="stage-time" id="stage-3-time">—</div>
+            </div>
+            <div class="stage-bar-wrap" id="stage-3-bar-wrap">
+              <div class="stage-bar" id="stage-3-bar"></div>
+            </div>
+            <div class="stage-log" id="stage-3-log" aria-live="polite"></div>
+          </div>
+        </div>
+
+        <!-- Idle placeholder -->
+        <div class="pipeline-idle" id="pipeline-idle">
+          <div class="idle-icon" aria-hidden="true">🤖</div>
+          <p>Fill in the form and click <strong>Generate Frontend</strong> to start the pipeline.</p>
+        </div>
+      </section>
+
+      <!-- Results -->
+      <section class="card results-card" id="results-panel" aria-label="Generation Results">
+        <div class="card-header">
+          <h2 class="card-title">
+            <span class="step-num success">03</span>
+            Results
+          </h2>
+          <div class="coverage-badge" id="coverage-badge"></div>
+        </div>
+
+        <div class="results-body">
+          <div class="result-command-wrap">
+            <p class="result-run-label">Run your generated app:</p>
+            <div class="command-box" id="command-box">
+              <code id="run-command">cd output/my-generated-app &amp;&amp; npm install &amp;&amp; npm run dev</code>
+              <button class="copy-btn" id="copy-btn" aria-label="Copy command">Copy</button>
+            </div>
+          </div>
+
+          <div class="file-tree-wrap">
+            <div class="file-tree-header">
+              <span>📁 Generated File Tree</span>
+            </div>
+            <pre class="file-tree" id="file-tree"></pre>
+          </div>
+        </div>
+      </section>
+
+    </div><!-- /right-col -->
+
+  </main>
+
+  <!-- ======= FOOTER ======= -->
+  <footer class="site-footer">
+    <p>AI Frontend Generation Agent · Groq API · React · Vite · Python 3.11</p>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+
+</html>

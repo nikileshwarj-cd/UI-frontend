@@ -1,0 +1,71 @@
+[
+  {
+    "id": "US101",
+    "title": "User Login",
+    "description": "As a registered user, I want to log in with my email and password so I can access the application.",
+    "priority": "high",
+    "acceptanceCriteria": [
+      "Login form is centered on the page",
+      "Email field validates correct email format",
+      "Password field is masked (type=password)",
+      "Both fields are required — empty submission shows error",
+      "Login button triggers form submission",
+      "On successful login, user is redirected to dashboard (TODO: API)",
+      "On failure, a clear error message is shown below the form",
+      "Form has a 'Forgot Password?' link"
+    ]
+  },
+  {
+    "id": "US102",
+    "title": "Navigation Bar",
+    "description": "As a user, I want a persistent navigation bar so I can move between sections of the application.",
+    "priority": "high",
+    "acceptanceCriteria": [
+      "Navigation bar is visible at the top of every page",
+      "Brand logo is displayed on the left",
+      "Navigation links are visible: Home, Dashboard, Profile, Settings",
+      "The active link is visually highlighted",
+      "Navigation collapses to a hamburger menu on mobile (< 768px)",
+      "User avatar or initials shown on the right when logged in"
+    ]
+  },
+  {
+    "id": "US103",
+    "title": "Dashboard Overview",
+    "description": "As a logged-in user, I want to see a dashboard with summary cards and key metrics.",
+    "priority": "high",
+    "acceptanceCriteria": [
+      "Dashboard displays at least 4 metric cards",
+      "Each card shows a title, a numeric value, and a trend indicator",
+      "Cards use a responsive grid layout (2 columns on tablet, 4 on desktop)",
+      "A recent activity list shows the last 5 actions",
+      "A chart or graph section shows data visualization (placeholder acceptable)"
+    ]
+  },
+  {
+    "id": "US104",
+    "title": "User Profile",
+    "description": "As a user, I want to view and edit my profile information.",
+    "priority": "medium",
+    "acceptanceCriteria": [
+      "Profile page shows avatar, name, email, and bio",
+      "Edit button enters edit mode with editable fields",
+      "Save button updates the displayed data (TODO: API call)",
+      "Cancel button reverts changes without saving",
+      "Avatar shows initials placeholder if no image is set"
+    ]
+  },
+  {
+    "id": "US105",
+    "title": "Search Functionality",
+    "description": "As a user, I want to search for items so I can quickly find what I need.",
+    "priority": "medium",
+    "acceptanceCriteria": [
+      "Search input is visible in the navigation bar or a dedicated search page",
+      "Typing in the search box filters results in real-time (client-side)",
+      "Empty search shows all results",
+      "No results shows an empty state message",
+      "Search results display item name, category, and a brief description"
+    ]
+  }
+]

@@ -1,0 +1,24 @@
+# ============================================================
+# AI Frontend Generation Agent — Python Dependencies
+# ============================================================
+
+# Groq SDK
+groq>=0.9.0
+
+# Pydantic for data validation
+pydantic>=2.6.0
+
+# Image processing
+Pillow>=10.3.0
+
+# Environment variable loading
+python-dotenv>=1.0.1
+
+# Web UI (control panel only — not for the generated app)
+flask>=3.0.3
+
+# Rich terminal output (pipeline progress)
+rich>=13.7.1
+
+# Utilities
+pathlib2>=2.3.7

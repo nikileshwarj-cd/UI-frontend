@@ -1,0 +1,60 @@
+# ============================================================
+# AI Frontend Generation Agent — .gitignore
+# ============================================================
+
+# --- Secrets ---
+.env
+*.env.local
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+ENV/
+env/
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+*.cover
+*.log
+
+# --- Node / Generated React Apps ---
+node_modules/
+.npm
+.pnp
+.pnp.js
+
+# --- Vite / Build artifacts ---
+dist/
+dist-ssr/
+*.local
+
+# --- Output (generated projects) ---
+output/
+
+# --- IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# --- Uploads (user-provided inputs are local) ---
+input/images/*.png
+input/images/*.jpg
+input/images/*.jpeg
+input/images/*.webp
