@@ -160,11 +160,13 @@ class StoryMapper:
         stories: List[Dict[str, Any]],
         element_ids: List[str],
     ) -> str:
+        compact_spec = json.dumps(spec_dict, separators=(',', ':'))[:6000]
+        compact_stories = json.dumps(stories, separators=(',', ':'))
         return (
             "## UI Specification\n"
-            f"```json\n{json.dumps(spec_dict, indent=2)[:6000]}\n```\n\n"
+            f"```json\n{compact_spec}\n```\n\n"
             "## User Stories\n"
-            f"```json\n{json.dumps(stories, indent=2)}\n```\n\n"
+            f"```json\n{compact_stories}\n```\n\n"
             "## Available Element IDs\n"
             f"{json.dumps(element_ids)}\n\n"
             "Map every user story to the most relevant UI elements from the specification above.\n"

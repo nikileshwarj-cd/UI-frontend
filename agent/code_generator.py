@@ -121,12 +121,15 @@ class CodeGenerator:
         image_path: Path,
     ) -> str:
         lang = EXT.upper()
+        # Compact JSON formatting removes indentation whitespace, saving ~40-50% tokens
+        compact_spec = json.dumps(spec_dict, separators=(',', ':'))
+        compact_mapping = json.dumps(mapping_dict, separators=(',', ':'))
         return (
             f"Generate a React {lang} project reproducing the reference UI screenshot.\n\n"
             "## UI Specification\n"
-            f"```json\n{json.dumps(spec_dict, indent=2)}\n```\n\n"
+            f"```json\n{compact_spec}\n```\n\n"
             "## Story/Element Mapping\n"
-            f"```json\n{json.dumps(mapping_dict, indent=2)}\n```\n\n"
+            f"```json\n{compact_mapping}\n```\n\n"
             f"Output language: {lang}\n"
             "Return the complete code generation JSON as described in the system prompt."
         )
@@ -255,7 +258,7 @@ class CodeGenerator:
         save_json({"storyId": story_id, "mappings": mappings}, story_dir / "ui_mapping.json")
 
     def _clean_react_code(self, content: str, comp_name: str, ext: str, is_ts: bool) -> str:
-        """Sanitize generated React code: fix export, imports, and JSX/TSX syntax."""
+        """Sanitize generated React code: fix export, imports, hooks, and JSX/TSX syntax."""
         if not content:
             return content
 
@@ -267,7 +270,22 @@ class CodeGenerator:
         # 1. Fix nested/broken import paths (e.g. '../sharedComponents/Sidebar' -> './Sidebar')
         content = re.sub(r"from\s+['\"](?:\.\./sharedComponents/|\./sharedComponents/|\./stories/[^/]+/)([^'\"]+)['\"]", r"from './\1'", content)
 
-        # 2. If output language is JSX (JavaScript), strip TypeScript annotations if model accidentally generated them
+        # 2. Automatically ensure used React hooks are present in 'react' import
+        hooks = ["useState", "useEffect", "useRef", "useCallback", "useMemo", "useContext"]
+        used_hooks = [h for h in hooks if re.search(r"\b" + h + r"\b", content)]
+        if used_hooks:
+            react_import_match = re.search(r"import\s+React\s*(?:,\s*\{([^}]+)\})?\s*from\s+['\"]react['\"]", content)
+            if react_import_match:
+                existing = [x.strip() for x in react_import_match.group(1).split(",")] if react_import_match.group(1) else []
+                missing = [h for h in used_hooks if h not in existing]
+                if missing:
+                    all_imports = ", ".join(sorted(set(existing + missing)))
+                    new_import = f"import React, {{ {all_imports} }} from 'react';"
+                    content = content[:react_import_match.start()] + new_import + content[react_import_match.end():]
+            elif "from 'react'" not in content and 'from "react"' not in content:
+                content = f"import React, {{ {', '.join(used_hooks)} }} from 'react';\n" + content
+
+        # 3. If output language is JSX (JavaScript), strip TypeScript annotations if model accidentally generated them
         if not is_ts or ext == "jsx":
             # Remove interface/type definitions
             content = re.sub(r"interface\s+\w+\s*\{[^}]*\}", "", content, flags=re.DOTALL)
@@ -283,11 +301,16 @@ class CodeGenerator:
             content = re.sub(r",?\s*(?:Dispatch|SetStateAction|FC)\b", "", content)
             content = re.sub(r"import React\s*,\s*\{\s*\}\s*from 'react';", "import React from 'react';", content)
 
-        # 3. Fix malformed template literal strings missing backticks inside JSX attributes (e.g. className={-input ${...}})
+        # 4. Fix malformed template literal strings missing backticks inside JSX attributes
         content = re.sub(r'className=\{([^`\'"\n\}]*\$\{[^\n\}]+\}[^`\'"\n\}]*)\}', r'className={`\1`}', content)
 
-        # 3. Fix truncated export line
-        if content.endswith("export default"):
+        # 5. Fix export default component name to match file component name
+        export_match = re.search(r"export\s+default\s+([A-Za-z0-9_]+);?", content)
+        if export_match:
+            actual_exported = export_match.group(1)
+            if actual_exported != comp_name and comp_name != "App":
+                content = content[:export_match.start()] + f"export default {comp_name};" + content[export_match.end():]
+        elif content.endswith("export default"):
             content = content + f" {comp_name};"
         elif content.endswith("export"):
             content = content + f" default {comp_name};"
@@ -658,6 +681,7 @@ body {{
             "react": "^18.2.0",
             "react-dom": "^18.2.0",
             "react-router-dom": "^6.22.0",
+            "lucide-react": "^0.344.0",
         }
         dev_deps: Dict[str, str] = {
             "@vitejs/plugin-react": "^4.2.1",

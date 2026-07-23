@@ -62,13 +62,12 @@ class GroqClient:
     # ------------------------------------------------------------------
 
     # Total TPM budget per request (kept safely below the 8K free-tier limit)
-    _TPM_BUDGET: int = 7500
-    # Tokens reserved for the model's output response (4000 tokens prevents truncation on complex UI specs)
-    _OUTPUT_TOKENS: int = 4000
+    _TPM_BUDGET: int = 7000
+    # Tokens reserved for the model's output response (2500 keeps total requested tokens < 7500)
+    _OUTPUT_TOKENS: int = 2500
     # Tokens reserved for system + user text prompts (rough upper bound)
     _PROMPT_OVERHEAD: int = 500
     # Max tokens the image itself may consume
-    # = 7500 - 4000 (output) - 500 (prompts) = 3000
     _IMAGE_TOKEN_BUDGET: int = _TPM_BUDGET - _OUTPUT_TOKENS - _PROMPT_OVERHEAD
 
     # Vision models charge roughly 1 token per ~750 bytes of base64 payload.
@@ -85,17 +84,13 @@ class GroqClient:
         img = Image.open(image_path).convert("RGB")
         orig_w, orig_h = img.size
 
-        # Start with the original size and shrink by 10 % each iteration
-        # until the encoded payload fits the token budget.
         scale = 1.0
         while True:
             new_w = max(1, int(orig_w * scale))
             new_h = max(1, int(orig_h * scale))
 
-            # Resize using high-quality LANCZOS filter
             resized = img.resize((new_w, new_h), Image.LANCZOS)
 
-            # Encode to JPEG in memory (JPEG is ~3-5x smaller than PNG)
             buffer = io.BytesIO()
             resized.save(buffer, format="JPEG", quality=85, optimize=True)
             encoded_bytes = buffer.getvalue()
@@ -117,10 +112,8 @@ class GroqClient:
                     )
                 return b64_data, "image/jpeg"
 
-            # Reduce by 10 % and try again
             scale -= 0.10
             if scale <= 0.05:
-                # Last resort: 5 % of original — always fits
                 console.print(
                     "[yellow][GroqClient] Image was very large; "
                     "reduced to minimum safe size.[/yellow]"
@@ -134,13 +127,11 @@ class GroqClient:
         image_path: Path,
         model: Optional[str] = None,
         temperature: float = 0.2,
-        # Capped at _OUTPUT_TOKENS to guarantee we stay within the TPM budget
         max_tokens: int = _OUTPUT_TOKENS,
     ) -> str:
-        """Send a vision request with an image optimized to fit within 7 500 TPM."""
+        """Send a vision request with an image optimized to fit within 7 000 TPM."""
         model = model or settings.vision_model
 
-        # Resize the image if needed and get its base64 encoding
         image_data, mime = self._optimize_image(image_path)
 
         messages = [
@@ -158,7 +149,15 @@ class GroqClient:
                 ],
             },
         ]
-        return self._call(model, messages, temperature, max_tokens)
+        try:
+            return self._call(model, messages, temperature, max_tokens)
+        except Exception as exc:
+            if model != "llama-3.2-11b-vision-preview":
+                console.print(
+                    "[yellow][GroqClient] Vision model rate limited; trying llama-3.2-11b-vision-preview...[/yellow]"
+                )
+                return self._call("llama-3.2-11b-vision-preview", messages, temperature, max_tokens)
+            raise
 
     # ------------------------------------------------------------------
     # Internal call with retry
@@ -172,11 +171,13 @@ class GroqClient:
         max_tokens: int,
     ) -> str:
         retries = 3
-        delay = 5.0
+        delay = 2.0
+        current_model = model
+
         for attempt in range(1, retries + 1):
             try:
                 response = self._client.chat.completions.create(
-                    model=model,
+                    model=current_model,
                     messages=messages,
                     temperature=temperature,
                     max_tokens=max_tokens,
@@ -190,28 +191,25 @@ class GroqClient:
                 )
                 sys.exit(1)
 
-            except RateLimitError:
+            except (RateLimitError, APIConnectionError) as exc:
                 if attempt < retries:
                     console.print(
-                        f"[yellow][GroqClient] Rate limited. Waiting {delay}s before retry {attempt}/{retries}...[/yellow]"
-                    )
-                    time.sleep(delay)
-                    delay *= 2
-                else:
-                    console.print("[bold red][GroqClient] Rate limit exceeded. Aborting.[/bold red]")
-                    raise
-
-            except APIConnectionError as exc:
-                if attempt < retries:
-                    console.print(
-                        f"[yellow][GroqClient] Connection error ({exc}). Retrying {attempt}/{retries}...[/yellow]"
+                        f"[yellow][GroqClient] API busy ({exc}). Retrying {attempt}/{retries} in {delay}s...[/yellow]"
                     )
                     time.sleep(delay)
                 else:
+                    console.print(f"[bold red][GroqClient] API error: {exc}[/bold red]")
                     raise
 
             except Exception as exc:
-                console.print(f"[bold red][GroqClient] Unexpected error: {exc}[/bold red]")
-                raise
+                exc_str = str(exc)
+                if ("rate_limit" in exc_str.lower() or "413" in exc_str or "tpm" in exc_str.lower()) and attempt < retries:
+                    console.print(
+                        f"[yellow][GroqClient] API busy. Retrying {attempt}/{retries} in {delay}s...[/yellow]"
+                    )
+                    time.sleep(delay)
+                else:
+                    console.print(f"[bold red][GroqClient] Unexpected error: {exc}[/bold red]")
+                    raise
 
         return ""

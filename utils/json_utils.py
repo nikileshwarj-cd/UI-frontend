@@ -53,17 +53,16 @@ def strip_fences(text: str) -> str:
 
 def repair_truncated_json(json_str: str) -> Optional[Dict[str, Any]]:
     """
-    Attempt to repair a truncated JSON string by completing unclosed string quotes
-    and closing open brackets and braces.
+    Attempt to repair a truncated JSON string by completing unclosed string quotes,
+    removing incomplete trailing key/value fragments, and closing open brackets and braces.
     """
-    # 1. Close open string literal if truncated mid-string
-    # Count unescaped double quotes
-    quotes = len(re.findall(r'(?<!\\)"', json_str))
-    if quotes % 2 != 0:
-        json_str += '"'
+    json_str = json_str.rstrip()
 
-    # Strip trailing comma if present at truncation point
-    json_str = re.sub(r',\s*$', '', json_str)
+    # 1. Strip incomplete trailing key / colon / value fragments at cutoff point
+    json_str = re.sub(r',\s*"[^"]*$', '', json_str)
+    json_str = re.sub(r',\s*"[^"]*"\s*:\s*$', '', json_str)
+    json_str = re.sub(r',\s*"[^"]*"\s*:\s*"[^"]*$', '', json_str)
+    json_str = re.sub(r'[:,\s]+$', '', json_str)
 
     # 2. Count unmatched opening brackets/braces
     stack = []
@@ -90,14 +89,10 @@ def repair_truncated_json(json_str: str) -> Optional[Dict[str, Any]]:
                 if (char == '}' and stack[-1] == '{') or (char == ']' and stack[-1] == '['):
                     stack.pop()
 
-    # If string was cut off mid-quote, close open string first
     if in_string:
         json_str = json_str.rstrip('\\') + '"'
 
-    # Strip trailing dangling colons or commas
-    json_str = json_str.rstrip()
-    if json_str.endswith(':') or json_str.endswith(','):
-        json_str = json_str[:-1].rstrip()
+    json_str = re.sub(r'[:,\s]+$', '', json_str)
 
     # 3. Append missing closing brackets in reverse order
     closing_map = {'{': '}', '[': ']'}
@@ -107,6 +102,40 @@ def repair_truncated_json(json_str: str) -> Optional[Dict[str, Any]]:
     try:
         return json.loads(json_str)
     except json.JSONDecodeError:
+        # Fallback repair attempt: strip trailing malformed lines line-by-line
+        lines = json_str.splitlines()
+        for i in range(len(lines) - 1, max(0, len(lines) - 10), -1):
+            trimmed = "\n".join(lines[:i])
+            trimmed = re.sub(r'[:,\s]+$', '', trimmed)
+            sub_stack = []
+            s_in_string = False
+            s_escaped = False
+            for c in trimmed:
+                if s_escaped:
+                    s_escaped = False
+                    continue
+                if c == '\\':
+                    s_escaped = True
+                    continue
+                if c == '"':
+                    s_in_string = not s_in_string
+                    continue
+                if s_in_string:
+                    continue
+                if c in '{[':
+                    sub_stack.append(c)
+                elif c in '}]':
+                    if sub_stack and ((c == '}' and sub_stack[-1] == '{') or (c == ']' and sub_stack[-1] == '[')):
+                        sub_stack.pop()
+            if s_in_string:
+                trimmed += '"'
+            trimmed = re.sub(r'[:,\s]+$', '', trimmed)
+            for c in reversed(sub_stack):
+                trimmed += closing_map[c]
+            try:
+                return json.loads(trimmed)
+            except json.JSONDecodeError:
+                continue
         return None
 
 
