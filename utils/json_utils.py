@@ -37,8 +37,22 @@ _THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
 def strip_fences(text: str) -> str:
     """Remove markdown code fences and <think> reasoning blocks from LLM responses."""
     text = text.strip()
-    # 1. Strip <think>...</think> blocks first (reasoning/thinking models)
-    text = _THINK_RE.sub("", text).strip()
+    # 1. Strip <think>...</think> blocks first (including unclosed <think> blocks)
+    if "<think>" in text.lower():
+        if "</think>" in text.lower():
+            text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL | re.IGNORECASE).strip()
+        else:
+            # Unclosed <think> block — keep content starting from first JSON brace '{' or '['
+            json_start = -1
+            for ch in ('{', '['):
+                pos = text.find(ch)
+                if pos != -1 and (json_start == -1 or pos < json_start):
+                    json_start = pos
+            if json_start != -1:
+                text = text[json_start:].strip()
+            else:
+                text = re.sub(r"<think>.*", "", text, flags=re.DOTALL | re.IGNORECASE).strip()
+
     # 2. Try multi-line fence block
     match = _FENCE_RE.search(text)
     if match:

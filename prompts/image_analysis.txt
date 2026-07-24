@@ -122,4 +122,18 @@ Return exactly this structure:
 - Identify the color palette with precision.
 - If a page has multiple distinct screens, create one entry per screen under "pages".
 
+## ⚠️ NEVER-MISS ELEMENTS — MUST ALWAYS CAPTURE EVERY ONE OF THESE
+These element types are COMMONLY MISSED and cause generation failures. You MUST explicitly scan for and capture EVERY instance:
+
+1. **Checkboxes** — e.g. "Remember Me" checkbox. elementType: "input", inputType: "checkbox", label: "Remember Me".
+2. **Inline links** — e.g. "Forgot Password?", "Sign up", "Terms". elementType: "link", htmlTag: "a".
+3. **Divider rows with text** — e.g. "OR CONTINUE WITH", "- OR -". elementType: "divider", label: the text content.
+4. **Social / OAuth buttons** — e.g. "Continue with Google", "Sign in with Apple". elementType: "button", label: exact button text. Include the icon (Google 'G' logo, Apple logo) as a child icon element.
+5. **Password visibility toggle icons** — elementType: "icon" inside the password input row.
+6. **Secondary text / subheadings** — e.g. "Sign in to manage your workspaces". elementType: "text" or "subheading".
+7. **Form group wrappers** — Each label+input pair must be wrapped in a "form-group" container element.
+8. **Row containers** — A "Remember Me" checkbox and "Forgot Password?" link on the SAME row must be wrapped together as a row container element with justifyContent: "space-between".
+
+Scan the screenshot methodically: TOP → BOTTOM, LEFT → RIGHT. Do not skip any visible element.
+
 Now analyze the provided screenshot and return the JSON specification.

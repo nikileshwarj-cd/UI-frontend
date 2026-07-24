@@ -63,17 +63,26 @@ class ImageAnalyzer:
             "Be thorough and concise — capture all structural containers and visible elements."
         )
 
-        emit(f"Sending to vision model: {settings.vision_model}")
-        raw_response = self._client.vision(
-            system_prompt=self._system_prompt,
-            user_text=user_prompt,
-            image_path=image_path,
-        )
+        spec: Optional[UISpec] = None
+        for attempt in range(1, settings.max_json_retries + 1):
+            emit(f"Sending to vision model: {settings.vision_model} (attempt {attempt}/{settings.max_json_retries})")
+            raw_response = self._client.vision(
+                system_prompt=self._system_prompt,
+                user_text=user_prompt,
+                image_path=image_path,
+            )
 
-        emit("Parsing vision model response...")
-        spec = self._parse_response(raw_response, image_path.name)
+            emit("Parsing vision model response...")
+            spec = self._parse_response(raw_response, image_path.name)
+            if spec is not None:
+                break
+
+            if attempt < settings.max_json_retries:
+                emit(f"[WARN] Failed to parse JSON from attempt {attempt}. Retrying vision query...")
+                time.sleep(2)
+
         if spec is None:
-            emit("[ERROR] Failed to parse UI spec from model response.")
+            emit("[ERROR] Failed to parse UI spec from model response after all retries.")
             return None
 
         # Patch sourceImage
