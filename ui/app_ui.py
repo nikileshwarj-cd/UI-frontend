@@ -122,6 +122,21 @@ def generate():
 
     # Launch pipeline in background thread
     def run_pipeline():
+        import importlib
+        import config
+        importlib.reload(config)
+        if hasattr(config.settings, "reload"):
+            config.settings.reload()
+        import models.story_mapping
+        import models.ui_spec
+        import agent.code_generator
+        import agent.story_mapper
+        import agent.image_analyzer
+        importlib.reload(models.story_mapping)
+        importlib.reload(models.ui_spec)
+        importlib.reload(agent.code_generator)
+        importlib.reload(agent.story_mapper)
+        importlib.reload(agent.image_analyzer)
         from agent import ImageAnalyzer, StoryMapper, CodeGenerator
         from utils.groq_client import GroqClient
         from utils.file_manager import FileManager
@@ -197,6 +212,44 @@ def generate():
             elapsed3 = int(time.monotonic() - t3)
             emit("stage_done", stage=3, name="Code Generation", elapsed=elapsed3,
                  coverage=report.coverage_percent if report else 0)
+
+            # --- Stage 4: UI Validation & Refinement ---
+            emit("stage_start", stage=4, name="UI Validation & Refinement")
+            t4 = time.monotonic()
+            val_report = {}
+            try:
+                from agent import UIValidator
+                validator = UIValidator(groq_client)
+                val_path = fm.metadata_dir / "validation_report.json"
+                val_report = validator.validate(
+                    ground_truth_image=image_path,
+                    output_path=val_path,
+                    progress_cb=lambda msg: emit("log", stage=4, message=msg),
+                ) or {}
+
+                score = val_report.get("similarity_score", 95)
+                emit("log", stage=4, message=f"UI Visual Similarity Score: {score}%")
+
+                if score < 98:
+                    emit("log", stage=4, message="Visual similarity below threshold (<98%). Triggering UI Regeneration Agent...")
+                    from agent import UIRegenerator
+                    regenerator = UIRegenerator(groq_client)
+                    regenerated = regenerator.regenerate(
+                        file_manager=fm,
+                        validation_report=val_report,
+                        project_name=project_name,
+                        progress_cb=lambda msg: emit("log", stage=4, message=msg),
+                    )
+                    if regenerated:
+                        emit("log", stage=4, message="✓ React UI Regeneration Agent refined component & CSS files.")
+                else:
+                    emit("log", stage=4, message="✓ UI visual match verified (≥98%). No regeneration needed.")
+
+            except Exception as val_exc:
+                emit("log", stage=4, message=f"[WARN] UI Validation step: {val_exc}")
+
+            elapsed4 = int(time.monotonic() - t4)
+            emit("stage_done", stage=4, name="UI Validation & Refinement", elapsed=elapsed4)
 
             # File tree
             file_tree = fm.file_tree()

@@ -74,7 +74,15 @@ class MappingDocument(BaseModel):
     model_config = {"populate_by_name": True}
 
     def stories_for_page(self, page_id: str) -> List[StoryUIMapping]:
-        return [m for m in self.mappings if m.page_id == page_id]
+        return [
+            m for m in self.mappings
+            if (m.page_id if hasattr(m, "page_id") else (m.get("page_id") or m.get("pageId"))) == page_id
+        ]
 
     def unique_story_ids(self) -> List[str]:
-        return list(dict.fromkeys(m.story_id for m in self.mappings))
+        sids = []
+        for m in self.mappings:
+            sid = m.story_id if hasattr(m, "story_id") else (m.get("story_id") or m.get("storyId") if isinstance(m, dict) else "")
+            if sid:
+                sids.append(sid)
+        return list(dict.fromkeys(sids))

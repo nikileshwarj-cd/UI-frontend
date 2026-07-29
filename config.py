@@ -58,6 +58,26 @@ class Settings:
     # Groq
     groq_api_key: str = field(default_factory=lambda: _require("GROQ_API_KEY"))
 
+    @property
+    def groq_api_keys(self) -> list[str]:
+        raw_keys = _get("GROQ_API_KEYS")
+        if raw_keys:
+            keys = [k.strip() for k in raw_keys.split(",") if k.strip()]
+            if keys:
+                return keys
+
+        keys = []
+        primary = _get("GROQ_API_KEY")
+        if primary:
+            keys.append(primary)
+
+        for var_name in ("GROQ_API_KEY_FALLBACK", "GROQ_API_KEY_SECONDARY", "GROQ_API_KEY_2", "GROQ_API_KEY_3"):
+            val = _get(var_name)
+            if val and val not in keys:
+                keys.append(val)
+
+        return keys if keys else ([self.groq_api_key] if self.groq_api_key else [])
+
     # Models — loaded lazily so tests can override env before import
     vision_model: str = field(
         default_factory=lambda: _get(
@@ -105,6 +125,13 @@ class Settings:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         (self.input_dir / "images").mkdir(parents=True, exist_ok=True)
         (self.input_dir / "user_stories").mkdir(parents=True, exist_ok=True)
+
+    def reload(self) -> None:
+        """Reload configuration from .env file."""
+        load_dotenv(_ROOT / ".env", override=True)
+        self.groq_api_key = _require("GROQ_API_KEY")
+        self.vision_model = _get("VISION_MODEL", "llama-3.2-11b-vision-preview")
+        self.code_model = _get("CODE_MODEL", "llama-3.3-70b-versatile")
 
     @property
     def file_extension(self) -> str:

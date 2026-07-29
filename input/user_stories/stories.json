@@ -2,78 +2,62 @@
   "stories": [
     {
       "story_id": "US002",
-      "epic_id": "EP001",
-      "title": "User Dashboard",
-      "description": "As an authenticated user, I want to view a dashboard containing workspace statistics and recent workspaces so that I can quickly understand my activity and access my projects.",
+      "epic_id": "EP002",
+      "title": "User Profile Management Page",
+      "description": "As an authenticated user, I want to view and update my personal profile information so that my account details remain accurate and up to date.",
       "acceptance_criteria": [
-        "Display the authenticated user's dashboard after successful login.",
-        "Display a sidebar containing Dashboard, Workspaces, Stories, Analytics, and Settings navigation options.",
-        "Display a welcome message containing the user's first name.",
-        "Display summary cards showing total workspaces, total stories, and completed stories.",
-        "Display a Recent Workspaces section.",
-        "Display the workspace name and number of stories for each recent workspace.",
-        "Allow users to open a workspace by selecting it from the recent workspace list.",
-        "Provide a 'New Workspace' button.",
-        "Redirect users to the workspace creation page when the 'New Workspace' button is clicked.",
-        "Display a notification icon in the dashboard header.",
-        "Display the authenticated user's profile information in the header.",
-        "Only authenticated users should be able to access the dashboard."
+        "Display the user's profile information after successful authentication.",
+        "Display editable fields for first name, last name, phone number, and profile picture.",
+        "Display the user's email address as a read-only field.",
+        "Allow users to update their profile information.",
+        "Allow users to upload or change their profile picture.",
+        "Display a 'Save Changes' button to submit profile updates.",
+        "Display a 'Cancel' button to discard unsaved changes.",
+        "Display success and error messages based on the update operation.",
+        "Load profile information from the backend profile API.",
+        "Display a loading indicator while profile data is being fetched."
       ],
       "business_rules": [
-        "Only authenticated and active users are allowed to access the dashboard.",
-        "Users must only see workspaces they own or have permission to access.",
-        "Dashboard statistics must be calculated using data accessible to the authenticated user.",
-        "Recent workspaces must be ordered by the most recently accessed or updated workspace.",
-        "Unauthorized users attempting to access the dashboard must be redirected to the login page."
+        "Only authenticated and active users can access their profile.",
+        "Users can only update their own profile information.",
+        "Email addresses cannot be modified after registration.",
+        "Profile updates must be recorded with the latest modification timestamp."
       ],
       "dependencies": [
-        "User Login",
         "JWT Authentication Service",
-        "Workspace Management Module",
-        "User Story Management Module",
-        "Analytics Service"
+        "User Management Module",
+        "File Upload Service"
       ],
       "api_requirements": [
-        "GET /api/v1/dashboard/summary - Retrieve dashboard statistics including total workspaces, total stories, and completed stories.",
-        "GET /api/v1/workspaces/recent - Retrieve recently accessed workspaces for the authenticated user.",
-        "GET /api/v1/users/me - Retrieve authenticated user profile information.",
-        "POST /api/v1/workspaces - Create a new workspace."
+        "GET /api/v1/users/me - Response: 200 OK with authenticated user's profile details.",
+        "PUT /api/v1/users/me - Request: {first_name, last_name, phone_number, profile_image}, Response: 200 OK with updated user profile.",
+        "POST /api/v1/uploads/profile-image - Upload profile image and return image URL."
       ],
       "database_tables": [
-        "users: id (UUID, primary key), first_name (VARCHAR), last_name (VARCHAR), email (VARCHAR, unique), password_hash (VARCHAR), is_active (BOOLEAN), created_at (TIMESTAMP), updated_at (TIMESTAMP)",
-        "workspaces: id (UUID, primary key), name (VARCHAR), description (TEXT), owner_id (UUID, foreign key), created_at (TIMESTAMP), updated_at (TIMESTAMP)",
-        "user_stories: id (UUID, primary key), workspace_id (UUID, foreign key), story_id (VARCHAR), title (VARCHAR), description (TEXT), status (VARCHAR), created_at (TIMESTAMP), updated_at (TIMESTAMP)",
-        "workspace_members: id (UUID, primary key), workspace_id (UUID, foreign key), user_id (UUID, foreign key), role (VARCHAR), created_at (TIMESTAMP)"
+        "users: id (UUID, primary key), first_name (VARCHAR), last_name (VARCHAR), email (VARCHAR, unique), phone_number (VARCHAR), profile_image_url (TEXT), is_active (BOOLEAN), updated_at (TIMESTAMP)"
       ],
       "validation_rules": [
-        "The dashboard must only load when a valid JWT access token is available.",
-        "Dashboard statistics must contain non-negative numeric values.",
-        "Only workspaces accessible to the authenticated user may be displayed.",
-        "Workspace names must not be empty.",
-        "The 'New Workspace' button must only be available to users with workspace creation permission."
+        "First name is required and must contain only alphabetic characters.",
+        "Last name is required and must contain only alphabetic characters.",
+        "Phone number must contain exactly 10 digits.",
+        "Uploaded profile images must be JPG, JPEG, or PNG format.",
+        "Maximum image size should not exceed 5 MB."
       ],
       "ui_requirements": [
-        "Display a persistent sidebar navigation on desktop screens.",
-        "Display the company logo at the top of the sidebar.",
-        "Highlight the currently selected navigation item.",
-        "Display the heading 'Dashboard' at the top of the main content area.",
-        "Display a personalized welcome message below the dashboard heading.",
-        "Display dashboard statistics using separate summary cards.",
-        "Display total workspaces, total stories, and completed stories as summary metrics.",
-        "Display the 'Recent Workspaces' section below the summary cards.",
-        "Provide a primary blue 'New Workspace' button.",
-        "Display workspace entries using cards or list rows with rounded corners.",
-        "Display a notification icon and user profile section in the header.",
-        "Collapse the sidebar into a mobile navigation menu on smaller screens.",
-        "The dashboard must be fully responsive for desktop, tablet, and mobile devices."
+        "Display the profile page inside a centered responsive card layout.",
+        "Display the user's profile picture at the top with an edit icon.",
+        "Arrange input fields in a two-column layout on desktop and a single-column layout on mobile devices.",
+        "Display labels above each input field.",
+        "Use rounded input fields with subtle shadows.",
+        "Display Save Changes and Cancel buttons aligned at the bottom-right.",
+        "Display success or error alert messages below the page header.",
+        "The page must be fully responsive for desktop, tablet, and mobile devices."
       ],
       "traceability_ids": [
-        "REQ-DASH-001",
-        "REQ-DASH-002",
-        "REQ-DASH-003",
-        "REQ-DASH-004",
-        "REQ-DASH-005",
-        "REQ-DASH-006"
+        "REQ-PROFILE-001",
+        "REQ-PROFILE-002",
+        "REQ-PROFILE-003",
+        "REQ-PROFILE-004"
       ]
     }
   ]

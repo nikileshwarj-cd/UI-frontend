@@ -444,7 +444,7 @@ function setGenerating(active) {
 }
 
 function resetPipeline() {
-  [1, 2, 3].forEach(n => {
+  [1, 2, 3, 4].forEach(n => {
     setStageStatus(n, 'pending');
     document.getElementById(`stage-${n}-log`).innerHTML = '';
     document.getElementById(`stage-${n}-time`).textContent = '—';

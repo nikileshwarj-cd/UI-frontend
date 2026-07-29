@@ -17,10 +17,18 @@ class UIElement(BaseModel):
         description="Unique element ID, e.g. UI_EMAIL_001",
     )
     element_type: str = Field(
-        ...,
+        default="div",
         alias="elementType",
         description="input | button | text | heading | image | card | nav | form | link | icon | list | table | modal | other",
     )
+
+    @field_validator("element_type", mode="before")
+    @classmethod
+    def coerce_element_type(cls, v: Any) -> str:
+        if v is None or not str(v).strip():
+            return "div"
+        return str(v).strip()
+
     label: str = Field(default="", description="Visible text label or placeholder")
 
     @field_validator("label", mode="before")
@@ -56,23 +64,43 @@ class UIElement(BaseModel):
 
     model_config = {"populate_by_name": True}
 
-    @field_validator("element_id")
+    @field_validator("element_id", mode="before")
     @classmethod
-    def validate_element_id(cls, v: str) -> str:
-        if not v.startswith("UI_"):
-            raise ValueError(f"elementId must start with 'UI_', got: {v!r}")
-        return v.upper()
+    def validate_element_id(cls, v: Any) -> str:
+        if v is None or not str(v).strip():
+            import uuid
+            return f"UI_EL_{uuid.uuid4().hex[:6].upper()}"
+        val = str(v).strip()
+        if not val.upper().startswith("UI_"):
+            return f"UI_{val.upper().lstrip('_')}"
+        return val.upper()
 
 
 class UISection(BaseModel):
     """A logical section/region within a page (e.g. header, hero, footer)."""
 
-    section_id: str = Field(..., alias="sectionId")
+    section_id: str = Field(default="SECTION_001", alias="sectionId")
+
+    @field_validator("section_id", mode="before")
+    @classmethod
+    def coerce_section_id(cls, v: Any) -> str:
+        if v is None or not str(v).strip():
+            import uuid
+            return f"SECTION_{uuid.uuid4().hex[:6].upper()}"
+        return str(v).strip()
+
     section_type: str = Field(
-        ...,
+        default="section",
         alias="sectionType",
         description="header | hero | nav | sidebar | main | footer | modal | other",
     )
+
+    @field_validator("section_type", mode="before")
+    @classmethod
+    def coerce_section_type(cls, v: Any) -> str:
+        if v is None or not str(v).strip():
+            return "section"
+        return str(v).strip()
     label: str = Field(default="")
 
     @field_validator("label", mode="before")

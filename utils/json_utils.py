@@ -53,61 +53,68 @@ def strip_fences(text: str) -> str:
 
 def repair_truncated_json(json_str: str) -> Optional[Dict[str, Any]]:
     """
-    Attempt to repair a truncated JSON string by completing unclosed string quotes
+    Attempt to repair a truncated JSON string by trimming incomplete trailing keys/values
     and closing open brackets and braces.
     """
-    # 1. Close open string literal if truncated mid-string
-    # Count unescaped double quotes
-    quotes = len(re.findall(r'(?<!\\)"', json_str))
-    if quotes % 2 != 0:
-        json_str += '"'
-
-    # Strip trailing comma if present at truncation point
-    json_str = re.sub(r',\s*$', '', json_str)
-
-    # 2. Count unmatched opening brackets/braces
-    stack = []
-    in_string = False
-    escaped = False
-
-    for char in json_str:
-        if escaped:
-            escaped = False
-            continue
-        if char == '\\':
-            escaped = True
-            continue
-        if char == '"':
-            in_string = not in_string
-            continue
-        if in_string:
-            continue
-
-        if char in '{[':
-            stack.append(char)
-        elif char in '}]':
-            if stack:
-                if (char == '}' and stack[-1] == '{') or (char == ']' and stack[-1] == '['):
-                    stack.pop()
-
-    # If string was cut off mid-quote, close open string first
-    if in_string:
-        json_str = json_str.rstrip('\\') + '"'
-
-    # Strip trailing dangling colons or commas
-    json_str = json_str.rstrip()
-    if json_str.endswith(':') or json_str.endswith(','):
-        json_str = json_str[:-1].rstrip()
-
-    # 3. Append missing closing brackets in reverse order
-    closing_map = {'{': '}', '[': ']'}
-    for char in reversed(stack):
-        json_str += closing_map[char]
-
-    try:
-        return json.loads(json_str)
-    except json.JSONDecodeError:
+    if not json_str or not json_str.strip():
         return None
+
+    s = json_str.strip()
+
+    # Direct parse
+    try:
+        return json.loads(s)
+    except json.JSONDecodeError:
+        pass
+
+    # Iteratively trim incomplete key/value tokens at the end until valid JSON is achieved
+    for _ in range(15):
+        s = re.sub(r'[:,\s]+$', '', s)
+        # Trim dangling key e.g. , "elementId or , "elementId"
+        s = re.sub(r',\s*"[^"]*"?$', '', s)
+        s = re.sub(r'[:,\s]+$', '', s)
+
+        stack = []
+        in_string = False
+        escaped = False
+
+        for char in s:
+            if escaped:
+                escaped = False
+                continue
+            if char == '\\':
+                escaped = True
+                continue
+            if char == '"':
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+
+            if char in '{[':
+                stack.append(char)
+            elif char in '}]':
+                if stack:
+                    if (char == '}' and stack[-1] == '{') or (char == ']' and stack[-1] == '['):
+                        stack.pop()
+
+        candidate = s
+        if in_string:
+            candidate = candidate.rstrip('\\') + '"'
+
+        candidate = re.sub(r'[:,\s]+$', '', candidate)
+        closing_map = {'{': '}', '[': ']'}
+        candidate += "".join(closing_map[c] for c in reversed(stack))
+
+        try:
+            res = json.loads(candidate)
+            if isinstance(res, dict):
+                return res
+        except json.JSONDecodeError:
+            # Drop trailing element (key-value, item, or container) and retry
+            s = re.sub(r',?\s*(?:"[^"]*"|\d+|true|false|null|\}\s*|\]\s*)$', '', s)
+
+    return None
 
 
 def parse_json_safe(text: str) -> Optional[Dict[str, Any]]:

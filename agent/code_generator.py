@@ -65,14 +65,24 @@ class CodeGenerator:
 
         user_prompt = self._build_prompt(spec_dict, mapping_dict, image_path)
 
-        model_name = settings.code_model if "gpt-oss" not in settings.code_model else "llama-3.3-70b-versatile"
-        emit(f"Sending to code model: {model_name} (this may take ~30–60s)")
-        raw_response = self._client.chat(
-            system_prompt=self._system_prompt.replace("{{LANGUAGE}}", EXT.upper()),
-            user_prompt=user_prompt,
-            model=model_name,
-            max_tokens=4000,
-        )
+        code_models = [settings.code_model, "llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
+        code_models = list(dict.fromkeys([m for m in code_models if "gpt-oss" not in m]))
+
+        raw_response = ""
+        for c_model in code_models:
+            emit(f"Sending to code model: {c_model} (this may take ~30–60s)...")
+            try:
+                raw_response = self._client.chat(
+                    system_prompt=self._system_prompt.replace("{{LANGUAGE}}", EXT.upper()),
+                    user_prompt=user_prompt,
+                    model=c_model,
+                    max_tokens=8192,
+                )
+                if raw_response and len(raw_response.strip()) > 0:
+                    break
+            except Exception as exc:
+                emit(f"[WARN] Model {c_model} failed: {exc}. Trying fallback...")
+                continue
 
         emit("Parsing generated code...")
         code_data = self._parse_code_response(raw_response)
@@ -148,6 +158,13 @@ class CodeGenerator:
 
         # --- package.json ---
         pkg = data.get("packageJson", self._default_package_json(project_name))
+        if isinstance(pkg, str):
+            try:
+                pkg = json.loads(pkg)
+            except Exception:
+                pkg = self._default_package_json(project_name)
+        if not isinstance(pkg, dict):
+            pkg = self._default_package_json(project_name)
         pkg["name"] = project_name.lower().replace(" ", "-")
         fm.write_text(
             fm.react_app_dir / "package.json",
@@ -156,12 +173,16 @@ class CodeGenerator:
 
         # --- vite.config ---
         vite_cfg = data.get("viteConfig", self._default_vite_config(is_ts))
+        if not isinstance(vite_cfg, str):
+            vite_cfg = self._default_vite_config(is_ts)
         vite_ext = "ts" if is_ts else "js"
         fm.write_text(fm.react_app_dir / f"vite.config.{vite_ext}", vite_cfg)
 
         # --- tsconfig.json ---
         if is_ts:
             ts_cfg = data.get("tsConfig", self._default_tsconfig())
+            if not isinstance(ts_cfg, str):
+                ts_cfg = json.dumps(ts_cfg, indent=2) if isinstance(ts_cfg, dict) else self._default_tsconfig()
             fm.write_text(fm.react_app_dir / "tsconfig.json", ts_cfg)
 
         # --- index.html (Vite entry) ---
@@ -172,28 +193,47 @@ class CodeGenerator:
 
         # --- App root ---
         app_root = data.get("appRoot", {})
-        app_content = app_root.get("appContent", self._default_app_root(data, ext))
-        main_content = app_root.get("mainContent", self._default_main(is_ts))
+        if not isinstance(app_root, dict):
+            app_root = {}
+        app_content = app_root.get("appContent") if isinstance(app_root, dict) else None
+        if not app_content or not isinstance(app_content, str):
+            app_content = self._default_app_root(data, ext)
+
+        main_content = app_root.get("mainContent") if isinstance(app_root, dict) else None
+        if not main_content or not isinstance(main_content, str):
+            main_content = self._default_main(is_ts)
+
         fm.write_text(fm.react_src_dir / f"App.{ext}", app_content)
         fm.write_text(fm.react_src_dir / f"main.{ext}", main_content)
         fm.write_text(fm.react_src_dir / "index.css", self._global_css(ui_spec))
 
         # --- Shared sub-components (Header, Sidebar, Footer, Nav, Cards) ---
-        for comp in data.get("sharedComponents", []):
-            comp_name = comp.get("componentName", "Component")
-            react_content = comp.get("reactContent", "")
-            css_content = comp.get("cssContent", "")
+        shared_comps = data.get("sharedComponents", [])
+        if isinstance(shared_comps, list):
+            for comp in shared_comps:
+                if not isinstance(comp, dict):
+                    continue
+                comp_name = comp.get("componentName", "Component")
+                react_content = comp.get("reactContent", "")
+                css_content = comp.get("cssContent", "")
 
-            react_content = self._clean_react_code(react_content, comp_name, ext, is_ts)
-            if "\\n" in css_content:
-                css_content = css_content.replace("\\n", "\n")
+                react_content = self._clean_react_code(react_content, comp_name, ext, is_ts)
+                if "\\n" in css_content:
+                    css_content = css_content.replace("\\n", "\n")
 
-            fm.write_text(fm.shared_components_dir / f"{comp_name}.{ext}", react_content)
-            if css_content:
-                fm.write_text(fm.shared_components_dir / f"{comp_name}.css", css_content)
+                fm.write_text(fm.shared_components_dir / f"{comp_name}.{ext}", react_content)
+                if css_content:
+                    fm.write_text(fm.shared_components_dir / f"{comp_name}.css", css_content)
 
         # --- Component pages ---
-        for page in data.get("pages", []):
+        pages_list = data.get("pages", [])
+        if not isinstance(pages_list, list) or not pages_list:
+            fallback_data = self._fallback_scaffold(ui_spec, mapping_doc, project_name)
+            pages_list = fallback_data.get("pages", [])
+
+        for page in pages_list:
+            if not isinstance(page, dict):
+                continue
             raw_cname = page.get("componentName") or page.get("pageName", "Page").replace(" ", "")
             if not raw_cname.endswith("Page") and not page.get("componentName"):
                 raw_cname += "Page"
@@ -248,9 +288,9 @@ class CodeGenerator:
 
         # ui_mapping.json for this story
         mappings = [
-            m.model_dump(by_alias=True)
+            m.model_dump(by_alias=True) if hasattr(m, "model_dump") else m
             for m in mapping_doc.mappings
-            if m.story_id in page.get("storyIds", [story_id])
+            if (m.story_id if hasattr(m, "story_id") else (m.get("story_id") or m.get("storyId") if isinstance(m, dict) else "")) in page.get("storyIds", [story_id])
         ]
         save_json({"storyId": story_id, "mappings": mappings}, story_dir / "ui_mapping.json")
 
@@ -259,10 +299,15 @@ class CodeGenerator:
         if not content:
             return content
 
-        if "\\n" in content:
-            content = content.replace("\\n", "\n")
-
-        content = content.rstrip()
+        # Auto-repair unclosed double-quoted strings on JSX lines
+        lines = content.splitlines()
+        fixed_lines = []
+        for line in lines:
+            quote_count = line.count('"') - line.count('\\"')
+            if quote_count % 2 != 0 and ('<' in line or '>' in line or '=' in line or 'svg' in line or 'path' in line):
+                line = line.rstrip() + '"'
+            fixed_lines.append(line)
+        content = "\n".join(fixed_lines).rstrip()
 
         # 1. Fix nested/broken import paths (e.g. '../sharedComponents/Sidebar' -> './Sidebar')
         content = re.sub(r"from\s+['\"](?:\.\./sharedComponents/|\./sharedComponents/|\./stories/[^/]+/)([^'\"]+)['\"]", r"from './\1'", content)
@@ -411,12 +456,36 @@ class CodeGenerator:
     # ------------------------------------------------------------------
 
     def _parse_code_response(self, raw: str) -> Optional[Dict[str, Any]]:
+        # 1. Try standard JSON parse first
         data = parse_json_safe(raw)
         if data and isinstance(data, dict):
             if "pages" in data:
                 return data
             if "reactContent" in data or "componentName" in data:
                 return {"pages": [data]}
+            for key in ("files", "components", "project", "code", "app"):
+                if key in data and isinstance(data[key], list):
+                    return {"pages": data[key]}
+                elif key in data and isinstance(data[key], dict):
+                    return data
+            return data
+
+        # 2. Dual code block parser (Block 1 = JSX/TSX, Block 2 = CSS)
+        code_blocks = re.findall(r"```(?:[a-zA-Z0-9_-]+)?\s*([\s\S]*?)```", raw)
+        if code_blocks:
+            jsx_code = code_blocks[0].strip()
+            css_code = code_blocks[1].strip() if len(code_blocks) >= 2 else ""
+            return {
+                "pages": [
+                    {
+                        "componentName": "App",
+                        "fileName": "App",
+                        "reactContent": jsx_code,
+                        "cssContent": css_code,
+                    }
+                ]
+            }
+
         console.print("[yellow]  Code parse failed.[/yellow]")
         return None
 
@@ -440,9 +509,9 @@ class CodeGenerator:
                     "pageName": page.page_name,
                     "route": page.route,
                     "storyIds": [
-                        m.story_id
+                        m.story_id if hasattr(m, "story_id") else (m.get("story_id") or m.get("storyId") if isinstance(m, dict) else "")
                         for m in mapping_doc.mappings
-                        if m.page_id == page.page_id
+                        if (m.page_id if hasattr(m, "page_id") else (m.get("page_id") or m.get("pageId") if isinstance(m, dict) else "")) == page.page_id
                     ],
                     "componentName": f"{page.page_name.replace(' ', '')}Page",
                     "fileName": f"{page.page_name.replace(' ', '')}Page",

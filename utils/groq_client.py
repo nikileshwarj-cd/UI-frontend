@@ -29,13 +29,34 @@ class GroqClient:
     """Initialises the Groq SDK and provides chat/vision helpers."""
 
     def __init__(self) -> None:
+        self._api_keys = settings.groq_api_keys
+        self._current_key_idx = 0
+        if not self._api_keys:
+            console.print(
+                "[bold red][GroqClient] No GROQ_API_KEY configured.[/bold red]"
+            )
+            sys.exit(1)
+        self._init_client()
+
+    def _init_client(self) -> None:
+        current_key = self._api_keys[self._current_key_idx]
         try:
-            self._client = Groq(api_key=settings.groq_api_key)
+            self._client = Groq(api_key=current_key)
         except Exception as exc:
             console.print(
                 f"[bold red][GroqClient] Failed to initialise Groq SDK: {exc}[/bold red]"
             )
             sys.exit(1)
+
+    def _switch_to_next_key(self, reason: str = "RateLimit / Token limit hit") -> bool:
+        if self._current_key_idx + 1 < len(self._api_keys):
+            self._current_key_idx += 1
+            console.print(
+                f"[bold yellow][GroqClient] {reason}. Switching to fallback API Key #{self._current_key_idx + 1}...[/bold yellow]"
+            )
+            self._init_client()
+            return True
+        return False
 
     # ------------------------------------------------------------------
     # Text Completion
@@ -185,12 +206,16 @@ class GroqClient:
                 return strip_fences(content)
 
             except AuthenticationError:
+                if self._switch_to_next_key("Authentication failed / Token invalid"):
+                    continue
                 console.print(
-                    "[bold red][GroqClient] Authentication failed — check your GROQ_API_KEY.[/bold red]"
+                    "[bold red][GroqClient] Authentication failed on all API keys — check your GROQ_API_KEY.[/bold red]"
                 )
                 sys.exit(1)
 
             except RateLimitError:
+                if self._switch_to_next_key("Rate limit / Token limit hit"):
+                    continue
                 if attempt < retries:
                     console.print(
                         f"[yellow][GroqClient] Rate limited. Waiting {delay}s before retry {attempt}/{retries}...[/yellow]"
@@ -198,7 +223,7 @@ class GroqClient:
                     time.sleep(delay)
                     delay *= 2
                 else:
-                    console.print("[bold red][GroqClient] Rate limit exceeded. Aborting.[/bold red]")
+                    console.print("[bold red][GroqClient] Rate limit exceeded on all API keys. Aborting.[/bold red]")
                     raise
 
             except APIConnectionError as exc:
@@ -211,6 +236,10 @@ class GroqClient:
                     raise
 
             except Exception as exc:
+                err_msg = str(exc).lower()
+                if "rate limit" in err_msg or "quota" in err_msg or "429" in err_msg or "token" in err_msg:
+                    if self._switch_to_next_key(f"Error ({exc})"):
+                        continue
                 console.print(f"[bold red][GroqClient] Unexpected error: {exc}[/bold red]")
                 raise
 

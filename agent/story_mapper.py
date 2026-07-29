@@ -88,10 +88,13 @@ class StoryMapper:
         if mapping_doc is None:
             emit("[WARN] Model mapping response incomplete. Generating resilient fallback mapping...")
             fallback_mappings = []
+            first_story = stories_list[0] if stories_list else {}
+            story_id_val = first_story.get("id") or first_story.get("story_id") or first_story.get("storyId") or "US101"
+            story_title_val = first_story.get("title") or first_story.get("name") or "User Story"
             for elem_id in element_ids[:15]:
                 fallback_mappings.append({
-                    "storyId": stories_list[0].get("storyId", "US101") if stories_list else "US101",
-                    "storyTitle": stories_list[0].get("title", "User Interface") if stories_list else "User Interface",
+                    "storyId": story_id_val,
+                    "storyTitle": story_title_val,
                     "pageId": "PAGE_MAIN",
                     "pageName": "Main Page",
                     "route": "/",
